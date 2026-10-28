@@ -1,0 +1,48 @@
+{
+  "project_info": {
+    "project_number": "1037048649491",
+    "project_id": "anganwadiconnect-cb692",
+    "storage_bucket": "anganwadiconnect-cb692.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1037048649491:android:5322953d4f6d701a42ace6",
+        "android_client_info": {
+          "package_name": "pushpendra.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyC6X4j2_V9nI7yJTp-lLrtt_yBCfXWP9tA"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1037048649491:android:5322953d4f6d701a42ace6",
+        "android_client_info": {
+          "package_name": "com.aistudio.poshantracker.kvzwxp"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyC6X4j2_V9nI7yJTp-lLrtt_yBCfXWP9tA"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
