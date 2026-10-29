@@ -3,6 +3,7 @@ package com.example.ui.auth
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -63,6 +64,7 @@ import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.ui.theme.AppLanguage
@@ -88,6 +90,8 @@ fun AuthScreen(
     val adminPin by viewModel.adminPinInput.collectAsState()
     val parentMobile by viewModel.parentMobileInput.collectAsState()
     val parentCode by viewModel.parentRegCodeInput.collectAsState()
+    val superAdminUser by viewModel.superAdminUsernameInput.collectAsState()
+    val superAdminPin by viewModel.superAdminPinInput.collectAsState()
 
     var selectedTab by remember { mutableIntStateOf(1) } // Default to Parent portal
     val focusManager = LocalFocusManager.current
@@ -124,8 +128,11 @@ fun AuthScreen(
                 )
             }
 
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                AppLanguage.values().forEach { lang ->
+            Row(
+                modifier = Modifier.horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                AppLanguage.entries.forEach { lang ->
                     FilterChip(
                         selected = language == lang,
                         onClick = { viewModel.setLanguage(lang) },
@@ -192,7 +199,7 @@ fun AuthScreen(
 
         Spacer(modifier = Modifier.height(24.dp))
 
-        // Dual Segmented Tabs (Clean Material 3)
+        // Segmented Tabs (Admin / Parent / Super Admin)
         Card(
             shape = RoundedCornerShape(14.dp),
             colors = CardDefaults.cardColors(containerColor = Slate100),
@@ -209,8 +216,8 @@ fun AuthScreen(
                     onClick = { selectedTab = 0 },
                     text = {
                         Text(
-                            text = AppStrings.tabAdmin(language),
-                            fontSize = 13.sp,
+                            text = if (language == AppLanguage.MARATHI) "सेविका (Admin)" else if (language == AppLanguage.HINDI) "कार्यकर्ता" else "Worker",
+                            fontSize = 11.sp,
                             fontWeight = if (selectedTab == 0) FontWeight.Bold else FontWeight.Normal
                         )
                     },
@@ -221,12 +228,24 @@ fun AuthScreen(
                     onClick = { selectedTab = 1 },
                     text = {
                         Text(
-                            text = AppStrings.tabParent(language),
-                            fontSize = 13.sp,
+                            text = if (language == AppLanguage.MARATHI) "पालक (Parent)" else if (language == AppLanguage.HINDI) "अभिभावक" else "Parent",
+                            fontSize = 11.sp,
                             fontWeight = if (selectedTab == 1) FontWeight.Bold else FontWeight.Normal
                         )
                     },
                     modifier = Modifier.testTag("tab_auth_parent")
+                )
+                Tab(
+                    selected = selectedTab == 2,
+                    onClick = { selectedTab = 2 },
+                    text = {
+                        Text(
+                            text = if (language == AppLanguage.MARATHI) "सुपर ॲडमिन" else if (language == AppLanguage.HINDI) "सुपर एडमिन" else "Super Admin",
+                            fontSize = 11.sp,
+                            fontWeight = if (selectedTab == 2) FontWeight.Bold else FontWeight.Normal
+                        )
+                    },
+                    modifier = Modifier.testTag("tab_auth_superadmin")
                 )
             }
         }
@@ -344,7 +363,7 @@ fun AuthScreen(
                     }
                 }
             }
-        } else {
+        } else if (selectedTab == 1) {
             // PARENT / GUARDIAN ACTIVATION & LOGIN FORM
             Card(
                 modifier = Modifier
@@ -510,6 +529,143 @@ fun AuthScreen(
                 nextEvent = "All doses complete",
                 onClick = { viewModel.fillParentDemo("9422187654", "ACT-3301-VS") }
             )
+        } else {
+            // SUPER ADMIN / DISTRICT OVERSIGHT PORTAL LOGIN FORM
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .border(1.dp, Slate200, RoundedCornerShape(16.dp))
+                    .testTag("super_admin_login_card"),
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(containerColor = Color.White),
+                elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+            ) {
+                Column(modifier = Modifier.padding(20.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = Icons.Default.SupervisorAccount,
+                            contentDescription = "Super Admin",
+                            tint = PrimaryIndigo,
+                            modifier = Modifier.size(22.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = if (language == AppLanguage.MARATHI) "सुपर ॲडमिन (जिल्हा नियंत्रण)"
+                            else if (language == AppLanguage.HINDI) "सुपर एडमिन (जिला नियंत्रण)"
+                            else "Super Admin (District CDPO)",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 16.sp,
+                            color = Slate900
+                        )
+                    }
+
+                    Text(
+                        text = if (language == AppLanguage.MARATHI)
+                            "पालकांच्या तक्रारींचे निवारण व अंगणवाडी सेविकांच्या कामाचे पर्यवेक्षण करण्यासाठी जिल्हा प्रशासकीय लॉगिन."
+                        else if (language == AppLanguage.HINDI)
+                            "अभिभावकों की शिकायतों के निवारण एवं आंगनवाड़ी कार्यकर्ताओं के पर्यवेक्षण हेतु जिला अधिकारी लॉगिन।"
+                        else
+                            "District Authority login to handle parent complaints and oversee Anganwadi Workers.",
+                        fontSize = 12.sp,
+                        color = Slate600,
+                        modifier = Modifier.padding(top = 4.dp, bottom = 12.dp)
+                    )
+
+                    OutlinedTextField(
+                        value = superAdminUser,
+                        onValueChange = { viewModel.setSuperAdminUsername(it) },
+                        label = {
+                            Text(
+                                if (language == AppLanguage.MARATHI) "सुपर ॲडमिन युझरनेम"
+                                else if (language == AppLanguage.HINDI) "सुपर एडमिन यूज़रनेम"
+                                else "Super Admin Username"
+                            )
+                        },
+                        placeholder = { Text("superadmin") },
+                        leadingIcon = { Icon(Icons.Default.Person, contentDescription = "User") },
+                        singleLine = true,
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("superadmin_username_input"),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = PrimaryIndigo,
+                            unfocusedBorderColor = Slate200
+                        )
+                    )
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    OutlinedTextField(
+                        value = superAdminPin,
+                        onValueChange = { viewModel.setSuperAdminPin(it) },
+                        label = {
+                            Text(
+                                if (language == AppLanguage.MARATHI) "सुरक्षा पिन / पासवर्ड"
+                                else if (language == AppLanguage.HINDI) "सुरक्षा पिन / पासवर्ड"
+                                else "Security PIN / Password"
+                            )
+                        },
+                        placeholder = { Text("super123") },
+                        leadingIcon = { Icon(Icons.Default.Lock, contentDescription = "PIN") },
+                        singleLine = true,
+                        visualTransformation = PasswordVisualTransformation(),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Done),
+                        keyboardActions = KeyboardActions(onDone = {
+                            focusManager.clearFocus()
+                            viewModel.loginSuperAdmin()
+                        }),
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("superadmin_pin_input"),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = PrimaryIndigo,
+                            unfocusedBorderColor = Slate200
+                        )
+                    )
+
+                    Spacer(modifier = Modifier.height(18.dp))
+
+                    Button(
+                        onClick = {
+                            focusManager.clearFocus()
+                            viewModel.loginSuperAdmin()
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(50.dp)
+                            .testTag("superadmin_submit_button"),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = PrimaryIndigo)
+                    ) {
+                        Text(
+                            text = if (language == AppLanguage.MARATHI) "सुपर ॲडमिन पोर्टल उघडा"
+                            else if (language == AppLanguage.HINDI) "सुपर एडमिन पोर्टल खोलें"
+                            else "Open Super Admin Dashboard",
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(14.dp))
+
+                    // 1-Click Demo Fill for Super Admin
+                    OutlinedButton(
+                        onClick = { viewModel.fillSuperAdminDemo() },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("demo_superadmin_fill_button"),
+                        shape = RoundedCornerShape(10.dp)
+                    ) {
+                        Text(
+                            text = "⚡ Quick Demo: Dr. Anita Deshmukh (superadmin / super123)",
+                            fontSize = 12.sp,
+                            color = PrimaryIndigo
+                        )
+                    }
+                }
+            }
         }
     }
 }
@@ -545,14 +701,21 @@ private fun DemoParentAccountCard(
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
             Column(modifier = Modifier.weight(1f)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
                     Text(
                         text = childName,
                         fontWeight = FontWeight.Bold,
                         fontSize = 14.sp,
-                        color = Slate900
+                        color = Slate900,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false)
                     )
-                    Spacer(modifier = Modifier.width(8.dp))
+                    Spacer(modifier = Modifier.width(6.dp))
                     Box(
                         modifier = Modifier
                             .clip(RoundedCornerShape(4.dp))
@@ -563,7 +726,9 @@ private fun DemoParentAccountCard(
                             text = status,
                             color = statusColor,
                             fontWeight = FontWeight.Bold,
-                            fontSize = 10.sp
+                            fontSize = 10.sp,
+                            maxLines = 1,
+                            softWrap = false
                         )
                     }
                 }
@@ -571,15 +736,21 @@ private fun DemoParentAccountCard(
                 Text(
                     text = "Guardian: $guardian • 📞 $mobile",
                     fontSize = 11.sp,
-                    color = Slate600
+                    color = Slate600,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
                 Text(
                     text = "Code: $code | Event: $nextEvent",
                     fontSize = 11.sp,
                     color = PrimaryIndigo,
-                    fontWeight = FontWeight.SemiBold
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
             }
+
+            Spacer(modifier = Modifier.width(8.dp))
 
             Box(
                 modifier = Modifier
@@ -591,7 +762,9 @@ private fun DemoParentAccountCard(
                     text = "Login ➔",
                     fontSize = 12.sp,
                     fontWeight = FontWeight.Bold,
-                    color = PrimaryIndigo
+                    color = PrimaryIndigo,
+                    maxLines = 1,
+                    softWrap = false
                 )
             }
         }

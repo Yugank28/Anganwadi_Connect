@@ -9,11 +9,15 @@ import com.example.data.model.CentreAnnouncement
 import com.example.data.model.ChildProfile
 import com.example.data.model.DiffImportResult
 import com.example.data.model.HealthRecord
+import com.example.data.model.HelpTicket
 import com.example.data.model.NotificationPriority
 import com.example.data.model.NotificationType
 import com.example.data.model.NutritionStatus
+import com.example.data.model.RationHandover
 import com.example.data.model.RationSchedule
 import com.example.data.model.SessionRole
+import com.example.data.model.TicketCategory
+import com.example.data.model.TicketStatus
 import com.example.data.model.UserSession
 import com.example.data.model.VaccinationRecord
 import com.example.data.remote.GrowthSummaryResult
@@ -76,9 +80,76 @@ class PoshanViewModel(application: Application) : AndroidViewModel(application) 
     private val _parentRegCodeInput = MutableStateFlow("")
     val parentRegCodeInput: StateFlow<String> = _parentRegCodeInput.asStateFlow()
 
+    // Super Admin Auth Form Inputs
+    private val _superAdminUsernameInput = MutableStateFlow("")
+    val superAdminUsernameInput: StateFlow<String> = _superAdminUsernameInput.asStateFlow()
+
+    private val _superAdminPinInput = MutableStateFlow("")
+    val superAdminPinInput: StateFlow<String> = _superAdminPinInput.asStateFlow()
+
+    // Parent Help Center / Complaint Form Inputs
+    private val _parentHelpCategory = MutableStateFlow(TicketCategory.WORKER_MISTAKE)
+    val parentHelpCategory: StateFlow<TicketCategory> = _parentHelpCategory.asStateFlow()
+
+    private val _parentHelpSubject = MutableStateFlow("")
+    val parentHelpSubject: StateFlow<String> = _parentHelpSubject.asStateFlow()
+
+    private val _parentHelpDescription = MutableStateFlow("")
+    val parentHelpDescription: StateFlow<String> = _parentHelpDescription.asStateFlow()
+
+    // Help Tickets Streams
+    val myHelpTickets: StateFlow<List<HelpTicket>> = userSession.flatMapLatest { session ->
+        if (session.isParent && session.username.isNotEmpty()) {
+            repository.getHelpTicketsForParent(session.username)
+        } else {
+            MutableStateFlow(emptyList())
+        }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val allHelpTickets: StateFlow<List<HelpTicket>> = repository.getAllHelpTickets()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val pendingHelpTicketsCount: StateFlow<Int> = repository.getPendingHelpTicketsCount()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
+
+    private val _ticketFilterStatus = MutableStateFlow<TicketStatus?>(null)
+    val ticketFilterStatus: StateFlow<TicketStatus?> = _ticketFilterStatus.asStateFlow()
+
+    val filteredHelpTickets: StateFlow<List<HelpTicket>> = combine(
+        allHelpTickets,
+        _ticketFilterStatus
+    ) { tickets, filter ->
+        if (filter == null) tickets else tickets.filter { it.status == filter }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    // Super Admin Resolution Form Inputs
+    private val _selectedTicketForResponse = MutableStateFlow<HelpTicket?>(null)
+    val selectedTicketForResponse: StateFlow<HelpTicket?> = _selectedTicketForResponse.asStateFlow()
+
+    private val _superAdminResponseInput = MutableStateFlow("")
+    val superAdminResponseInput: StateFlow<String> = _superAdminResponseInput.asStateFlow()
+
+    private val _superAdminStatusInput = MutableStateFlow(TicketStatus.RESOLVED)
+    val superAdminStatusInput: StateFlow<TicketStatus> = _superAdminStatusInput.asStateFlow()
+
     // Active Child (Strict isolation in Parent mode)
     private val _activeChildId = MutableStateFlow<String?>("AW-042-01")
     val activeChildId: StateFlow<String?> = _activeChildId.asStateFlow()
+
+    // Ration Handover & Parent Authentication Streams
+    val activeChildRationHandover: StateFlow<RationHandover?> = _activeChildId.flatMapLatest { childId ->
+        if (childId != null) {
+            repository.getRationHandoverForChild(childId)
+        } else {
+            MutableStateFlow(null)
+        }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+
+    val allRationHandovers: StateFlow<List<RationHandover>> = repository.getAllRationHandovers()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    private val _handoverAuthCodeInput = MutableStateFlow("")
+    val handoverAuthCodeInput: StateFlow<String> = _handoverAuthCodeInput.asStateFlow()
 
     private val _selectedChild = MutableStateFlow<ChildProfile?>(null)
     val selectedChild: StateFlow<ChildProfile?> = _selectedChild.asStateFlow()
@@ -109,7 +180,7 @@ class PoshanViewModel(application: Application) : AndroidViewModel(application) 
     ) { childId, session ->
         Pair(childId, session.role)
     }.flatMapLatest { (childId, role) ->
-        if (role == SessionRole.ADMIN) {
+        if (role == SessionRole.ADMIN || role == SessionRole.SUPER_ADMIN) {
             repository.getNotifications(null)
         } else {
             repository.getNotifications(childId)
@@ -122,7 +193,7 @@ class PoshanViewModel(application: Application) : AndroidViewModel(application) 
     ) { childId, session ->
         Pair(childId, session.role)
     }.flatMapLatest { (childId, role) ->
-        if (role == SessionRole.ADMIN) {
+        if (role == SessionRole.ADMIN || role == SessionRole.SUPER_ADMIN) {
             repository.getUnreadNotificationCount(null)
         } else {
             repository.getUnreadNotificationCount(childId)
@@ -160,14 +231,15 @@ class PoshanViewModel(application: Application) : AndroidViewModel(application) 
         allChildren,
         _adminSearchQuery,
         _adminFilterStatus
-    ) { list, query, status ->
+    ) { list, query, _ ->
         list.filter { child ->
             val matchQuery = query.isBlank() ||
                 child.name.contains(query, ignoreCase = true) ||
                 child.childId.contains(query, ignoreCase = true) ||
-                child.guardian.contains(query, ignoreCase = true)
-            val matchStatus = status == null || child.name.isNotEmpty()
-            matchQuery && matchStatus
+                child.guardian.contains(query, ignoreCase = true) ||
+                child.regCode.contains(query, ignoreCase = true) ||
+                child.parentContact.contains(query, ignoreCase = true)
+            matchQuery
         }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
@@ -264,12 +336,151 @@ class PoshanViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
+    fun setSuperAdminUsername(user: String) {
+        _superAdminUsernameInput.value = user
+    }
+
+    fun setSuperAdminPin(pin: String) {
+        _superAdminPinInput.value = pin
+    }
+
+    fun loginSuperAdmin() {
+        viewModelScope.launch {
+            val result = repository.loginSuperAdmin(_superAdminUsernameInput.value, _superAdminPinInput.value)
+            result.onSuccess {
+                _userMessage.value = "Welcome, ${it.displayName}!"
+            }.onFailure {
+                _userMessage.value = it.message ?: "Super Admin Login Failed"
+            }
+        }
+    }
+
+    fun fillSuperAdminDemo() {
+        _superAdminUsernameInput.value = "superadmin"
+        _superAdminPinInput.value = "super123"
+        loginSuperAdmin()
+    }
+
+    fun setParentHelpCategory(category: TicketCategory) {
+        _parentHelpCategory.value = category
+    }
+
+    fun setParentHelpSubject(subject: String) {
+        _parentHelpSubject.value = subject
+    }
+
+    fun setParentHelpDescription(description: String) {
+        _parentHelpDescription.value = description
+    }
+
+    fun submitHelpTicket() {
+        val subject = _parentHelpSubject.value.trim()
+        val desc = _parentHelpDescription.value.trim()
+        if (subject.isEmpty() || desc.isEmpty()) {
+            _userMessage.value = "Please fill in both subject and complaint details"
+            return
+        }
+
+        viewModelScope.launch {
+            val session = userSession.value
+            val child = selectedChild.value
+            val ticket = HelpTicket(
+                parentName = session.displayName.ifEmpty { "Registered Parent" },
+                parentContact = session.username,
+                childId = child?.childId,
+                childName = child?.name,
+                centerId = session.centerId,
+                centerName = session.centerName,
+                category = _parentHelpCategory.value,
+                subject = subject,
+                description = desc,
+                status = TicketStatus.PENDING
+            )
+            val result = repository.submitHelpTicket(ticket)
+            result.onSuccess {
+                _parentHelpSubject.value = ""
+                _parentHelpDescription.value = ""
+                _userMessage.value = "✅ Complaint / Help Ticket submitted directly to Super Admin!"
+            }.onFailure {
+                _userMessage.value = it.message ?: "Failed to submit ticket"
+            }
+        }
+    }
+
+    fun setSelectedTicketForResponse(ticket: HelpTicket?) {
+        _selectedTicketForResponse.value = ticket
+        if (ticket != null) {
+            _superAdminResponseInput.value = ticket.superAdminResponse ?: ""
+            _superAdminStatusInput.value = if (ticket.status == TicketStatus.PENDING) TicketStatus.RESOLVED else ticket.status
+        }
+    }
+
+    fun setSuperAdminResponseInput(response: String) {
+        _superAdminResponseInput.value = response
+    }
+
+    fun setSuperAdminStatusInput(status: TicketStatus) {
+        _superAdminStatusInput.value = status
+    }
+
+    fun setTicketFilterStatus(status: TicketStatus?) {
+        _ticketFilterStatus.value = status
+    }
+
+    fun setHandoverAuthCodeInput(code: String) {
+        _handoverAuthCodeInput.value = code
+    }
+
+    fun verifyAndCompleteRationHandover(childId: String, code: String) {
+        if (code.isBlank()) {
+            _userMessage.value = "Please enter parent pass code or registration code"
+            return
+        }
+
+        viewModelScope.launch {
+            val result = repository.verifyAndCompleteRationHandover(childId, code)
+            result.onSuccess {
+                _handoverAuthCodeInput.value = ""
+                _userMessage.value = "✅ Parent Authenticated! Take-Home Ration packet marked as handed over."
+            }.onFailure { err ->
+                _userMessage.value = err.message ?: "Authentication Failed"
+            }
+        }
+    }
+
+    fun respondToHelpTicket() {
+        val ticket = _selectedTicketForResponse.value ?: return
+        val responseText = _superAdminResponseInput.value.trim()
+        if (responseText.isEmpty()) {
+            _userMessage.value = "Please enter resolution comments"
+            return
+        }
+
+        viewModelScope.launch {
+            val result = repository.respondToHelpTicket(
+                ticketId = ticket.id,
+                ticketNumber = ticket.ticketNumber,
+                response = responseText,
+                newStatus = _superAdminStatusInput.value
+            )
+            result.onSuccess {
+                _selectedTicketForResponse.value = null
+                _superAdminResponseInput.value = ""
+                _userMessage.value = "Resolution sent to parent device!"
+            }.onFailure {
+                _userMessage.value = it.message ?: "Failed to respond to ticket"
+            }
+        }
+    }
+
     fun logout() {
         repository.logout()
         _adminUsernameInput.value = ""
         _adminPinInput.value = ""
         _parentMobileInput.value = ""
         _parentRegCodeInput.value = ""
+        _superAdminUsernameInput.value = ""
+        _superAdminPinInput.value = ""
         _userMessage.value = "Logged out successfully"
     }
 

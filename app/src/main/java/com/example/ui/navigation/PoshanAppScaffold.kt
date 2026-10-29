@@ -52,6 +52,7 @@ import androidx.compose.ui.unit.sp
 import com.example.data.model.NotificationPriority
 import com.example.data.model.SessionRole
 import com.example.ui.admin.AdminHubScreen
+import com.example.ui.admin.SuperAdminHubScreen
 import com.example.ui.auth.AuthScreen
 import com.example.ui.parent.ParentHubScreen
 import com.example.ui.theme.AppLanguage
@@ -130,6 +131,9 @@ fun PoshanAppScaffold(
                     }
                     SessionRole.PARENT -> {
                         ParentHubScreen(viewModel = viewModel)
+                    }
+                    SessionRole.SUPER_ADMIN -> {
+                        SuperAdminHubScreen(viewModel = viewModel)
                     }
                 }
             }

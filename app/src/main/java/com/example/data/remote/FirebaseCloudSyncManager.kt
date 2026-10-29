@@ -671,6 +671,63 @@ class FirebaseCloudSyncManager private constructor(private val context: Context)
         }
     }
 
+    /**
+     * Posts a Help Desk / Complaint ticket to Cloud Firestore server database.
+     */
+    suspend fun submitHelpTicketToCloud(ticket: com.example.data.model.HelpTicket): Result<Unit> {
+        return try {
+            val payload = hashMapOf(
+                "id" to ticket.id,
+                "ticketNumber" to ticket.ticketNumber,
+                "parentName" to ticket.parentName,
+                "parentContact" to ticket.parentContact,
+                "childId" to ticket.childId,
+                "childName" to ticket.childName,
+                "centerId" to ticket.centerId,
+                "centerName" to ticket.centerName,
+                "category" to ticket.category.name,
+                "subject" to ticket.subject,
+                "description" to ticket.description,
+                "status" to ticket.status.name,
+                "timestamp" to ticket.timestamp,
+                "formattedDate" to ticket.formattedDate,
+                "superAdminResponse" to ticket.superAdminResponse,
+                "responseTimestamp" to ticket.responseTimestamp,
+                "serverUpdatedAt" to FieldValue.serverTimestamp()
+            )
+            firestore.collection(COLLECTION_HELP_TICKETS)
+                .document(ticket.ticketNumber)
+                .set(payload, SetOptions.merge())
+                .await()
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Log.e(TAG, "Error submitting help ticket to Cloud Firestore", e)
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * Updates ticket resolution/response in Cloud Firestore server database.
+     */
+    suspend fun updateTicketResponseInCloud(ticketNumber: String, status: String, response: String): Result<Unit> {
+        return try {
+            val payload = hashMapOf(
+                "status" to status,
+                "superAdminResponse" to response,
+                "responseTimestamp" to System.currentTimeMillis(),
+                "serverUpdatedAt" to FieldValue.serverTimestamp()
+            )
+            firestore.collection(COLLECTION_HELP_TICKETS)
+                .document(ticketNumber)
+                .update(payload as Map<String, Any>)
+                .await()
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Log.e(TAG, "Error updating ticket response in Cloud Firestore", e)
+            Result.failure(e)
+        }
+    }
+
     companion object {
         const val TAG = "FirebaseCloudSync"
         const val COLLECTION_CHILDREN = "children"
@@ -678,6 +735,7 @@ class FirebaseCloudSyncManager private constructor(private val context: Context)
         const val COLLECTION_VACCINATIONS = "vaccinations"
         const val COLLECTION_ANNOUNCEMENTS = "announcements"
         const val COLLECTION_RATION_SCHEDULES = "ration_schedules"
+        const val COLLECTION_HELP_TICKETS = "help_tickets"
 
         @Volatile
         private var instance: FirebaseCloudSyncManager? = null

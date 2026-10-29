@@ -13,6 +13,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -63,7 +64,9 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.ScrollableTabRow
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
@@ -84,6 +87,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.model.ChildProfile
@@ -124,6 +128,10 @@ fun AdminHubScreen(
     val broadcastPriority by viewModel.broadcastPriorityInput.collectAsState()
     val broadcastTarget by viewModel.broadcastTargetChildId.collectAsState()
     val notifications by viewModel.notifications.collectAsState()
+    val allHandovers by viewModel.allRationHandovers.collectAsState()
+    val authCodeInput by viewModel.handoverAuthCodeInput.collectAsState()
+    val filteredChildren by viewModel.filteredChildren.collectAsState()
+    val searchQuery by viewModel.adminSearchQuery.collectAsState()
     val context = LocalContext.current
 
     var selectedTab by remember { mutableIntStateOf(0) }
@@ -277,20 +285,22 @@ fun AdminHubScreen(
                             }
                             context.startActivity(Intent.createChooser(shareIntent, "Save Official Template"))
                         },
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
                         shape = RoundedCornerShape(8.dp),
                         colors = ButtonDefaults.buttonColors(containerColor = PrimaryIndigo),
                         modifier = Modifier.testTag("btn_download_template")
                     ) {
-                        Icon(imageVector = Icons.Default.Download, contentDescription = "Download", modifier = Modifier.size(16.dp))
+                        Icon(imageVector = Icons.Default.Download, contentDescription = "Download", modifier = Modifier.size(15.dp))
                         Spacer(modifier = Modifier.width(4.dp))
-                        Text("Export", fontSize = 12.sp)
+                        Text("Export", fontSize = 12.sp, maxLines = 1, softWrap = false)
                     }
                 }
             }
 
-            // Tabs: [1. Attendance & Services] [2. Broadcast Alerts 📢] [3. Bulk File Import] [4. Roster]
-            TabRow(
+            // Tabs: [1. Attendance & Services] [2. Broadcast Alerts 📢] [3. Bulk File Import] [4. Roster] [5. Ration Auth 🔑]
+            ScrollableTabRow(
                 selectedTabIndex = selectedTab,
+                edgePadding = 12.dp,
                 containerColor = Color.White,
                 contentColor = PrimaryIndigo
             ) {
@@ -342,6 +352,18 @@ fun AdminHubScreen(
                     },
                     modifier = Modifier.testTag("tab_roster")
                 )
+                Tab(
+                    selected = selectedTab == 4,
+                    onClick = { selectedTab = 4 },
+                    text = {
+                        Text(
+                            text = if (language == AppLanguage.MARATHI) "राशन पडताळणी 🔑" else "Ration Auth 🔑",
+                            fontSize = 11.sp,
+                            fontWeight = if (selectedTab == 4) FontWeight.Bold else FontWeight.Normal
+                        )
+                    },
+                    modifier = Modifier.testTag("tab_ration_auth")
+                )
             }
 
             when (selectedTab) {
@@ -387,8 +409,18 @@ fun AdminHubScreen(
                     onResetDiff = { viewModel.resetDiffState() }
                 )
                 3 -> ChildrenRosterTab(
+                    children = filteredChildren,
+                    searchQuery = searchQuery,
+                    language = language,
+                    onSearchChange = { viewModel.setAdminSearch(it) }
+                )
+                4 -> RationHandoverAuthTab(
                     children = allChildren,
-                    language = language
+                    handovers = allHandovers,
+                    authCodeInput = authCodeInput,
+                    language = language,
+                    onAuthCodeChange = { viewModel.setHandoverAuthCodeInput(it) },
+                    onVerifyHandover = { childId, code -> viewModel.verifyAndCompleteRationHandover(childId, code) }
                 )
             }
         }
@@ -426,48 +458,57 @@ private fun AttendanceServicesTab(
             // Service Dispatch Actions Row
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
                 Button(
                     onClick = onOpenScheduleRation,
+                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 6.dp),
                     modifier = Modifier
                         .weight(1f)
                         .testTag("btn_dispatch_ration"),
                     shape = RoundedCornerShape(10.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = PrimaryIndigo)
                 ) {
-                    Icon(imageVector = Icons.Default.Fastfood, contentDescription = "Ration", modifier = Modifier.size(16.dp))
+                    Icon(imageVector = Icons.Default.Fastfood, contentDescription = "Ration", modifier = Modifier.size(15.dp))
                     Spacer(modifier = Modifier.width(4.dp))
                     Text(
                         text = if (language == AppLanguage.MARATHI) "आहार वाटप" else "Rations",
-                        fontSize = 11.sp
+                        fontSize = 11.sp,
+                        maxLines = 1,
+                        softWrap = false,
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
 
                 Button(
                     onClick = onOpenBroadcast,
+                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 6.dp),
                     modifier = Modifier
                         .weight(1f)
                         .testTag("btn_quick_broadcast"),
                     shape = RoundedCornerShape(10.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF047857)) // Emerald
                 ) {
-                    Icon(imageVector = Icons.Default.Campaign, contentDescription = "Broadcast", modifier = Modifier.size(16.dp))
+                    Icon(imageVector = Icons.Default.Campaign, contentDescription = "Broadcast", modifier = Modifier.size(15.dp))
                     Spacer(modifier = Modifier.width(4.dp))
                     Text(
                         text = if (language == AppLanguage.MARATHI) "पालकांना अलर्ट 📢" else "Alert 📢",
-                        fontSize = 11.sp
+                        fontSize = 11.sp,
+                        maxLines = 1,
+                        softWrap = false,
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
 
                 OutlinedButton(
                     onClick = onResetSeed,
+                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 6.dp),
                     modifier = Modifier.testTag("btn_reset_seed"),
                     shape = RoundedCornerShape(10.dp)
                 ) {
                     Icon(imageVector = Icons.Default.RestartAlt, contentDescription = "Reset", modifier = Modifier.size(15.dp))
                     Spacer(modifier = Modifier.width(3.dp))
-                    Text("Reset", fontSize = 11.sp)
+                    Text("Reset", fontSize = 11.sp, maxLines = 1, softWrap = false)
                 }
             }
         }
@@ -488,19 +529,25 @@ private fun AttendanceServicesTab(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Column {
+                    Column(modifier = Modifier.weight(1f)) {
                         Text(
                             text = if (language == AppLanguage.MARATHI) "आजची दैनिक उपस्थिती" else "Today's Daily Attendance",
                             fontWeight = FontWeight.Bold,
                             fontSize = 14.sp,
-                            color = Slate900
+                            color = Slate900,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
                         Text(
                             text = "$presentCount उपस्थित / ${children.size} एकूण नोंदणीकृत",
                             fontSize = 12.sp,
-                            color = Slate600
+                            color = Slate600,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
                     }
+
+                    Spacer(modifier = Modifier.width(8.dp))
 
                     val pct = if (children.isNotEmpty()) (presentCount.toFloat() / children.size.toFloat() * 100).toInt() else 0
                     Box(
@@ -512,8 +559,10 @@ private fun AttendanceServicesTab(
                         Text(
                             text = "$pct% Present",
                             fontWeight = FontWeight.Bold,
-                            fontSize = 13.sp,
-                            color = StatusNormal
+                            fontSize = 12.sp,
+                            color = StatusNormal,
+                            maxLines = 1,
+                            softWrap = false
                         )
                     }
                 }
@@ -543,14 +592,20 @@ private fun AttendanceServicesTab(
                             text = child.name,
                             fontWeight = FontWeight.Bold,
                             fontSize = 14.sp,
-                            color = Slate900
+                            color = Slate900,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
                         Text(
                             text = "${child.childId} • Guardian: ${child.guardian}",
                             fontSize = 11.sp,
-                            color = Slate600
+                            color = Slate600,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
                     }
+
+                    Spacer(modifier = Modifier.width(8.dp))
 
                     // Responsive Toggle Pills (Present / Absent)
                     Row(
@@ -572,7 +627,9 @@ private fun AttendanceServicesTab(
                                 text = AppStrings.present(language),
                                 color = if (isPresent) Color.White else Slate700,
                                 fontWeight = FontWeight.Bold,
-                                fontSize = 11.sp
+                                fontSize = 11.sp,
+                                maxLines = 1,
+                                softWrap = false
                             )
                         }
 
@@ -588,7 +645,9 @@ private fun AttendanceServicesTab(
                                 text = AppStrings.absent(language),
                                 color = if (!isPresent) Color.White else Slate700,
                                 fontWeight = FontWeight.Bold,
-                                fontSize = 11.sp
+                                fontSize = 11.sp,
+                                maxLines = 1,
+                                softWrap = false
                             )
                         }
                     }
@@ -942,7 +1001,9 @@ private fun BulkExcelImportTab(
 @Composable
 private fun ChildrenRosterTab(
     children: List<ChildProfile>,
-    language: AppLanguage
+    searchQuery: String,
+    language: AppLanguage,
+    onSearchChange: (String) -> Unit
 ) {
     LazyColumn(
         modifier = Modifier
@@ -950,48 +1011,109 @@ private fun ChildrenRosterTab(
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
-        items(children) { child ->
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .border(1.dp, Slate200, RoundedCornerShape(12.dp)),
-                shape = RoundedCornerShape(12.dp),
-                colors = CardDefaults.cardColors(containerColor = Color.White),
-                elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(14.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+        item {
+            OutlinedTextField(
+                value = searchQuery,
+                onValueChange = onSearchChange,
+                label = {
+                    Text(
+                        if (language == AppLanguage.MARATHI) "बालक, कोड किंवा पालकांचे नाव शोधा..."
+                        else if (language == AppLanguage.HINDI) "बच्चे, कोड या अभिभावक का नाम खोजें..."
+                        else "Search child name, ID, code or guardian..."
+                    )
+                },
+                leadingIcon = { Icon(Icons.Default.Search, contentDescription = "Search") },
+                trailingIcon = {
+                    if (searchQuery.isNotEmpty()) {
+                        IconButton(onClick = { onSearchChange("") }) {
+                            Icon(Icons.Default.Close, contentDescription = "Clear")
+                        }
+                    }
+                },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(10.dp),
+                colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = PrimaryIndigo)
+            )
+        }
+
+        if (children.isEmpty()) {
+            item {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = CardDefaults.cardColors(containerColor = Color.White)
                 ) {
-                    Column(modifier = Modifier.weight(1f)) {
+                    Box(modifier = Modifier.padding(20.dp), contentAlignment = Alignment.Center) {
                         Text(
-                            text = child.name,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 14.sp,
-                            color = Slate900
-                        )
-                        Text(
-                            text = "${child.childId} • DOB: ${child.dob} • Code: ${child.regCode}",
-                            fontSize = 11.sp,
-                            color = PrimaryIndigo,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                        Text(
-                            text = "Guardian: ${child.guardian} (📞 ${child.parentContact})",
-                            fontSize = 11.sp,
+                            text = if (language == AppLanguage.MARATHI) "कोणताही बालक सापडला नाही." else "No matching child record found.",
+                            fontSize = 12.sp,
                             color = Slate600
                         )
                     }
+                }
+            }
+        } else {
+            items(children) { child ->
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .border(1.dp, Slate200, RoundedCornerShape(12.dp)),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = CardDefaults.cardColors(containerColor = Color.White),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(14.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = child.name,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 14.sp,
+                                color = Slate900,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            Text(
+                                text = "${child.childId} • DOB: ${child.dob} • Code: ${child.regCode}",
+                                fontSize = 11.sp,
+                                color = PrimaryIndigo,
+                                fontWeight = FontWeight.SemiBold,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            Text(
+                                text = "Guardian: ${child.guardian} (📞 ${child.parentContact})",
+                                fontSize = 11.sp,
+                                color = Slate600,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
 
-                    Text(
-                        text = "Linked ✅",
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = StatusNormal
-                    )
+                        Spacer(modifier = Modifier.width(8.dp))
+
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(6.dp))
+                                .background(Color(0xFFECFDF5))
+                                .padding(horizontal = 8.dp, vertical = 4.dp)
+                        ) {
+                            Text(
+                                text = "Linked ✅",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = StatusNormal,
+                                maxLines = 1,
+                                softWrap = false
+                            )
+                        }
+                    }
                 }
             }
         }
@@ -1054,4 +1176,233 @@ private fun ScheduleRationDialog(
             TextButton(onClick = onDismiss) { Text("Cancel") }
         }
     )
+}
+
+@Composable
+private fun RationHandoverAuthTab(
+    children: List<ChildProfile>,
+    handovers: List<com.example.data.model.RationHandover>,
+    authCodeInput: String,
+    language: AppLanguage,
+    onAuthCodeChange: (String) -> Unit,
+    onVerifyHandover: (childId: String, code: String) -> Unit
+) {
+    var selectedChildId by remember { mutableStateOf(children.firstOrNull()?.childId ?: "AW-042-01") }
+    val selectedChild = children.firstOrNull { it.childId == selectedChildId } ?: children.firstOrNull()
+    val handoverMap = handovers.associateBy { it.childId }
+    val currentHandover = selectedChild?.let { handoverMap[it.childId] }
+
+    LazyColumn(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp)
+    ) {
+        item {
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .border(1.dp, PrimaryIndigo.copy(alpha = 0.25f), RoundedCornerShape(16.dp)),
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(containerColor = Color.White),
+                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Box(
+                            modifier = Modifier
+                                .size(36.dp)
+                                .clip(CircleShape)
+                                .background(PrimaryIndigoContainer),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Fastfood,
+                                contentDescription = null,
+                                tint = PrimaryIndigo,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Column {
+                            Text(
+                                text = if (language == AppLanguage.MARATHI) "पोषण आहार वाटप व पालक पडताळणी"
+                                else "Ration Handover & Parent Authenticator",
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 15.sp,
+                                color = Slate900
+                            )
+                            Text(
+                                text = "Verify parent Pass Code or Mobile before handing over ration packets",
+                                fontSize = 11.sp,
+                                color = Slate600
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(14.dp))
+
+                    Text(
+                        text = if (language == AppLanguage.MARATHI) "१. बालक व पालक निवडा:" else "1. Select Child / Guardian:",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Slate900
+                    )
+
+                    Spacer(modifier = Modifier.height(6.dp))
+
+                    // Child selector list
+                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        children.forEach { child ->
+                            val isDone = handoverMap[child.childId]?.isHandedOver == true
+                            val isSel = child.childId == selectedChildId
+
+                            Card(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .border(
+                                        width = if (isSel) 2.dp else 1.dp,
+                                        color = if (isSel) PrimaryIndigo else Slate200,
+                                        shape = RoundedCornerShape(10.dp)
+                                    )
+                                    .clickable { selectedChildId = child.childId },
+                                shape = RoundedCornerShape(10.dp),
+                                colors = CardDefaults.cardColors(
+                                    containerColor = if (isSel) PrimaryIndigoContainer else Color.White
+                                )
+                            ) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(10.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Column {
+                                        Text(
+                                            text = "${child.name} (${child.childId})",
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 13.sp,
+                                            color = Slate900
+                                        )
+                                        Text(
+                                            text = "Guardian: ${child.guardian} • Pass Code: ${child.regCode}",
+                                            fontSize = 11.sp,
+                                            color = Slate600
+                                        )
+                                    }
+
+                                    Box(
+                                        modifier = Modifier
+                                            .clip(RoundedCornerShape(6.dp))
+                                            .background(if (isDone) Color(0xFFECFDF5) else Color(0xFFFEF3C7))
+                                            .padding(horizontal = 6.dp, vertical = 2.dp)
+                                    ) {
+                                        Text(
+                                            text = if (isDone) "✅ Delivered" else "⌛ Pending",
+                                            fontSize = 10.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = if (isDone) StatusNormal else Color(0xFFD97706)
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(14.dp))
+
+                    selectedChild?.let { child ->
+                        HorizontalDivider(color = Slate200)
+
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        Text(
+                            text = if (language == AppLanguage.MARATHI) "२. पालकांचा सुरक्षा कोड प्रविष्ट करा:" else "2. Enter Parent Security Pass Code / PIN:",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Slate900
+                        )
+
+                        Spacer(modifier = Modifier.height(6.dp))
+
+                        OutlinedTextField(
+                            value = authCodeInput,
+                            onValueChange = onAuthCodeChange,
+                            label = { Text("Enter Code (e.g. ${child.regCode})") },
+                            placeholder = { Text(child.regCode) },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(10.dp),
+                            colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = PrimaryIndigo)
+                        )
+
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        // Quick demo code fill
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Text(text = "Quick Demo Code:", fontSize = 11.sp, color = Slate600)
+                            FilterChip(
+                                selected = false,
+                                onClick = { onAuthCodeChange(child.regCode) },
+                                label = { Text(child.regCode, fontSize = 11.sp, fontWeight = FontWeight.Bold) }
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        if (currentHandover?.isHandedOver == true) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .background(Color(0xFFECFDF5))
+                                    .border(1.dp, Color(0xFFA7F3D0), RoundedCornerShape(10.dp))
+                                    .padding(12.dp)
+                            ) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(Icons.Default.CheckCircle, contentDescription = null, tint = StatusNormal, modifier = Modifier.size(22.dp))
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Column {
+                                        Text(
+                                            text = "AUTHENTICATED & HANDED OVER",
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 13.sp,
+                                            color = StatusNormal
+                                        )
+                                        Text(
+                                            text = "Verified on ${currentHandover.formattedHandoverTime} by ${currentHandover.verifiedBySevika}",
+                                            fontSize = 11.sp,
+                                            color = Slate900
+                                        )
+                                    }
+                                }
+                            }
+                        } else {
+                            Button(
+                                onClick = { onVerifyHandover(child.childId, authCodeInput) },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(48.dp),
+                                shape = RoundedCornerShape(10.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = PrimaryIndigo)
+                            ) {
+                                Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(18.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = if (language == AppLanguage.MARATHI) "पालक पडताळणी व राशन वाटप पूर्ण करा"
+                                    else "Verify Parent & Complete Handover",
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
 }

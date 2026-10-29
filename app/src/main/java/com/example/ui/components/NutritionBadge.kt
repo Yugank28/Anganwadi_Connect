@@ -23,6 +23,8 @@ import androidx.compose.ui.unit.sp
 import com.example.data.model.NutritionStatus
 import com.example.ui.theme.AppLanguage
 
+import androidx.compose.ui.text.style.TextOverflow
+
 @Composable
 fun NutritionBadge(
     status: NutritionStatus,
@@ -56,7 +58,10 @@ fun NutritionBadge(
             text = label,
             color = status.textColor,
             fontSize = if (isLarge) 15.sp else 12.sp,
-            fontWeight = FontWeight.Bold
+            fontWeight = FontWeight.Bold,
+            maxLines = 1,
+            softWrap = false,
+            overflow = TextOverflow.Ellipsis
         )
     }
 }

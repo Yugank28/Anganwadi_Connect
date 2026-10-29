@@ -8,6 +8,8 @@ import androidx.room.TypeConverters
 import com.example.data.model.AppNotification
 import com.example.data.model.ChildProfile
 import com.example.data.model.HealthRecord
+import com.example.data.model.HelpTicket
+import com.example.data.model.RationHandover
 import com.example.data.model.VaccinationRecord
 import com.example.data.parser.SampleDataGenerator
 import kotlinx.coroutines.CoroutineScope
@@ -19,9 +21,11 @@ import kotlinx.coroutines.launch
         ChildProfile::class,
         HealthRecord::class,
         VaccinationRecord::class,
-        AppNotification::class
+        AppNotification::class,
+        HelpTicket::class,
+        RationHandover::class
     ],
-    version = 2,
+    version = 4,
     exportSchema = false
 )
 @TypeConverters(Converters::class)
@@ -29,6 +33,8 @@ abstract class AppDatabase : RoomDatabase() {
 
     abstract fun childDao(): ChildDao
     abstract fun notificationDao(): NotificationDao
+    abstract fun helpTicketDao(): HelpTicketDao
+    abstract fun rationHandoverDao(): RationHandoverDao
 
     companion object {
         @Volatile
@@ -68,6 +74,14 @@ abstract class AppDatabase : RoomDatabase() {
             val notifDao = database.notificationDao()
             if (notifDao.getNotificationCount() == 0) {
                 notifDao.insertNotifications(SampleDataGenerator.getInitialNotifications())
+            }
+            val ticketDao = database.helpTicketDao()
+            if (ticketDao.getTicketCount() == 0) {
+                ticketDao.insertTickets(SampleDataGenerator.getInitialHelpTickets())
+            }
+            val handoverDao = database.rationHandoverDao()
+            if (handoverDao.getHandoverCount() == 0) {
+                handoverDao.upsertHandovers(SampleDataGenerator.getInitialHandovers())
             }
         }
     }

@@ -4,19 +4,24 @@ import android.content.Context
 import android.net.Uri
 import com.example.data.local.AppDatabase
 import com.example.data.local.ChildDao
+import com.example.data.local.HelpTicketDao
 import com.example.data.local.NotificationDao
+import com.example.data.local.RationHandoverDao
 import com.example.data.model.AnnouncementCategory
 import com.example.data.model.AppNotification
 import com.example.data.model.CentreAnnouncement
 import com.example.data.model.ChildProfile
 import com.example.data.model.DiffImportResult
 import com.example.data.model.HealthRecord
+import com.example.data.model.HelpTicket
 import com.example.data.model.NotificationPriority
 import com.example.data.model.NotificationType
 import com.example.data.model.NutritionStatus
 import com.example.data.model.ParsedChildRecord
+import com.example.data.model.RationHandover
 import com.example.data.model.RationSchedule
 import com.example.data.model.SessionRole
+import com.example.data.model.TicketStatus
 import com.example.data.model.UserSession
 import com.example.data.model.VaccinationRecord
 import com.example.data.parser.CsvParser
@@ -41,6 +46,7 @@ interface ParentConnectRepository {
 
     suspend fun loginAdmin(username: String, pin: String): Result<UserSession>
     suspend fun loginParent(mobile: String, code: String): Result<UserSession>
+    suspend fun loginSuperAdmin(username: String, pin: String): Result<UserSession>
     fun logout()
 
     fun getChildProfile(childId: String): Flow<ChildProfile?>
@@ -51,6 +57,23 @@ interface ParentConnectRepository {
     fun getRationSchedules(): Flow<List<RationSchedule>>
     fun getAnnouncements(): Flow<List<CentreAnnouncement>>
     fun getAttendanceMap(): Flow<Map<String, Boolean>>
+
+    // Help Center & Complaints (Super Admin)
+    fun getHelpTicketsForParent(parentContact: String): Flow<List<HelpTicket>>
+    fun getAllHelpTickets(): Flow<List<HelpTicket>>
+    fun getPendingHelpTicketsCount(): Flow<Int>
+    suspend fun submitHelpTicket(ticket: HelpTicket): Result<Long>
+    suspend fun respondToHelpTicket(
+        ticketId: Long,
+        ticketNumber: String,
+        response: String,
+        newStatus: TicketStatus
+    ): Result<Unit>
+
+    // Ration Handover & Parent Authentication
+    fun getRationHandoverForChild(childId: String): Flow<RationHandover?>
+    fun getAllRationHandovers(): Flow<List<RationHandover>>
+    suspend fun verifyAndCompleteRationHandover(childId: String, authCode: String): Result<Unit>
 
     // Real-Time In-App Notifications
     fun getNotifications(childId: String? = null): Flow<List<AppNotification>>
@@ -86,6 +109,8 @@ class ParentConnectRepositoryImpl(
     private val context: Context,
     private val dao: ChildDao,
     private val notificationDao: NotificationDao,
+    private val helpTicketDao: HelpTicketDao = AppDatabase.getDatabase(context).helpTicketDao(),
+    private val rationHandoverDao: RationHandoverDao = AppDatabase.getDatabase(context).rationHandoverDao(),
     private val notificationRepository: NotificationRepository = NotificationRepositoryImpl.getInstance(context),
     private val cloudSyncManager: com.example.data.remote.FirebaseCloudSyncManager = com.example.data.remote.FirebaseCloudSyncManager.getInstance(context)
 ) : ParentConnectRepository {
@@ -117,6 +142,12 @@ class ParentConnectRepositoryImpl(
             }
             if (notificationDao.getNotificationCount() == 0) {
                 notificationDao.insertNotifications(SampleDataGenerator.getInitialNotifications())
+            }
+            if (helpTicketDao.getTicketCount() == 0) {
+                helpTicketDao.insertTickets(SampleDataGenerator.getInitialHelpTickets())
+            }
+            if (rationHandoverDao.getHandoverCount() == 0) {
+                rationHandoverDao.upsertHandovers(SampleDataGenerator.getInitialHandovers())
             }
         }
     }
@@ -174,6 +205,117 @@ class ParentConnectRepositoryImpl(
 
     override fun logout() {
         _currentSession.value = UserSession()
+    }
+
+    override suspend fun loginSuperAdmin(username: String, pin: String): Result<UserSession> = withContext(Dispatchers.Default) {
+        val cleanUser = username.trim()
+        val cleanPin = pin.trim()
+        if (cleanUser == SampleDataGenerator.SUPER_ADMIN_USERNAME && cleanPin == SampleDataGenerator.SUPER_ADMIN_PASSWORD) {
+            val session = UserSession(
+                role = SessionRole.SUPER_ADMIN,
+                username = cleanUser,
+                displayName = SampleDataGenerator.SUPER_ADMIN_NAME,
+                centerId = "ALL-CENTERS",
+                centerName = "District Oversight HQ (District Officer)",
+                authenticatedChildId = null
+            )
+            _currentSession.value = session
+            Result.success(session)
+        } else {
+            Result.failure(IllegalArgumentException("Invalid Super Admin Username or PIN. (Use: superadmin / super123)"))
+        }
+    }
+
+    override fun getHelpTicketsForParent(parentContact: String): Flow<List<HelpTicket>> =
+        helpTicketDao.getTicketsForParent(parentContact)
+
+    override fun getAllHelpTickets(): Flow<List<HelpTicket>> =
+        helpTicketDao.getAllTickets()
+
+    override fun getPendingHelpTicketsCount(): Flow<Int> =
+        helpTicketDao.getPendingTicketsCount()
+
+    override suspend fun submitHelpTicket(ticket: HelpTicket): Result<Long> = withContext(Dispatchers.IO) {
+        try {
+            val id = helpTicketDao.insertTicket(ticket)
+            val savedTicket = ticket.copy(id = id)
+            cloudSyncManager.submitHelpTicketToCloud(savedTicket)
+            Result.success(id)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    override suspend fun respondToHelpTicket(
+        ticketId: Long,
+        ticketNumber: String,
+        response: String,
+        newStatus: TicketStatus
+    ): Result<Unit> = withContext(Dispatchers.IO) {
+        try {
+            val now = System.currentTimeMillis()
+            helpTicketDao.updateTicketResponse(ticketId, newStatus, response, now)
+            cloudSyncManager.updateTicketResponseInCloud(ticketNumber, newStatus.name, response)
+
+            sendBroadcastNotification(
+                titleEn = "Help Desk Response: $ticketNumber",
+                titleMr = "तक्रार निवारण अभिप्राय: $ticketNumber",
+                titleHi = "शिकायत समाधान उत्तर: $ticketNumber",
+                messageEn = "District Officer (Super Admin) responded: \"$response\"",
+                messageMr = "सुपर ॲडमिन (जिल्हा अधिकारी) यांचा अभिप्राय: \"$response\"",
+                messageHi = "सुपर एडमिन (जिला अधिकारी) का उत्तर: \"$response\"",
+                type = NotificationType.MESSAGE,
+                priority = NotificationPriority.HIGH
+            )
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    override fun getRationHandoverForChild(childId: String): Flow<RationHandover?> =
+        rationHandoverDao.getHandoverForChild(childId)
+
+    override fun getAllRationHandovers(): Flow<List<RationHandover>> =
+        rationHandoverDao.getAllHandovers()
+
+    override suspend fun verifyAndCompleteRationHandover(childId: String, authCode: String): Result<Unit> = withContext(Dispatchers.IO) {
+        val child = dao.getChildByIdDirect(childId)
+            ?: return@withContext Result.failure(IllegalArgumentException("Child record '$childId' not found."))
+
+        val cleanCode = authCode.trim().uppercase()
+        val matchCode = child.regCode.uppercase()
+        val matchPhone = child.parentContact.trim()
+
+        val isCodeValid = cleanCode == matchCode ||
+            cleanCode == matchPhone ||
+            cleanCode == child.childId.uppercase() ||
+            (cleanCode.length >= 4 && matchCode.endsWith(cleanCode)) ||
+            (cleanCode.length >= 4 && matchPhone.endsWith(cleanCode))
+
+        if (isCodeValid) {
+            val now = System.currentTimeMillis()
+            val sdf = SimpleDateFormat("dd-MMM-yyyy 'at' hh:mm a", Locale.getDefault())
+            val formattedTime = sdf.format(Date(now))
+            val sevikaName = SampleDataGenerator.ADMIN_NAME
+
+            rationHandoverDao.completeHandoverForChild(childId, now, formattedTime, sevikaName)
+
+            sendBroadcastNotification(
+                titleEn = "✅ Ration Pickup Verified: ${child.name}",
+                titleMr = "✅ पोषण आहार वाटप पडताळणी: ${child.name}",
+                titleHi = "✅ पोषण राशन वितरण सत्यापित: ${child.name}",
+                messageEn = "Take-Home Ration packet for ${child.name} was successfully authenticated and handed over to ${child.guardian} at Anganwadi Centre on $formattedTime.",
+                messageMr = "${child.name} साठीचा पोषण आहार (THR) यशस्वीरित्या पडताळणी करून ${child.guardian} यांना अंगणवाडी केंद्रावर सोपवण्यात आला आहे.",
+                messageHi = "${child.name} का टेक-होम राशन (THR) आंगनवाड़ी केंद्र में ${child.guardian} को सफलतापूर्वक दिया गया।",
+                type = NotificationType.RATION_SCHEDULE,
+                priority = NotificationPriority.HIGH,
+                targetChildId = childId
+            )
+            Result.success(Unit)
+        } else {
+            Result.failure(IllegalArgumentException("Parent Auth Failed: Code '$authCode' does not match registered Pass Code (${child.regCode}) for ${child.name}."))
+        }
     }
 
     // Direct Cloud Firestore Server Data Streams
@@ -439,11 +581,15 @@ class ParentConnectRepositoryImpl(
         dao.clearAllHealthRecords()
         dao.clearAllVaccinations()
         notificationDao.clearAllNotifications()
+        helpTicketDao.clearAllTickets()
+        rationHandoverDao.clearAllHandovers()
 
         dao.upsertProfiles(SampleDataGenerator.getInitialProfiles())
         dao.insertHealthRecords(SampleDataGenerator.getInitialHealthRecords())
         dao.insertVaccinations(SampleDataGenerator.getInitialVaccinations())
         notificationDao.insertNotifications(SampleDataGenerator.getInitialNotifications())
+        helpTicketDao.insertTickets(SampleDataGenerator.getInitialHelpTickets())
+        rationHandoverDao.upsertHandovers(SampleDataGenerator.getInitialHandovers())
 
         summaryCache.clear()
         _attendanceMap.value = SampleDataGenerator.initialAttendanceMap
@@ -462,6 +608,8 @@ class ParentConnectRepositoryImpl(
                     context.applicationContext,
                     db.childDao(),
                     db.notificationDao(),
+                    db.helpTicketDao(),
+                    db.rationHandoverDao(),
                     notifRepo,
                     syncManager
                 )

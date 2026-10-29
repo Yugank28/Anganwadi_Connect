@@ -2,7 +2,10 @@ package com.example.data.parser
 
 import com.example.data.model.ChildProfile
 import com.example.data.model.HealthRecord
+import com.example.data.model.HelpTicket
 import com.example.data.model.NutritionStatus
+import com.example.data.model.TicketCategory
+import com.example.data.model.TicketStatus
 import com.example.data.model.VaccinationRecord
 import com.example.data.model.VaccineStatus
 
@@ -13,6 +16,12 @@ object SampleDataGenerator {
     const val ADMIN_PASSWORD = "123456"
     const val ADMIN_NAME = "Rekha Tai Patil (Anganwadi Sevika)"
     const val ADMIN_CENTER = "AW-Center-042 (Shivaji Nagar)"
+
+    // Super Admin Credentials
+    const val SUPER_ADMIN_USERNAME = "superadmin"
+    const val SUPER_ADMIN_PASSWORD = "super123"
+    const val SUPER_ADMIN_NAME = "Dr. Anita Deshmukh (District Officer)"
+    const val SUPER_ADMIN_DESIGNATION = "District Child Development Project Officer (CDPO)"
 
     val sampleCsvTemplate = """
 child_id,name,dob,age_months,gender,guardian,parent_contact,reg_code,weight_kg,height_cm,nutrition_status,next_vaccine,attendance_count,date,notes
@@ -212,6 +221,79 @@ AW-042-05,Tanvi Santosh Jadhav,18-Jun-2023,28,F,Savita Jadhav,9834223344,ACT-667
             priority = com.example.data.model.NotificationPriority.NORMAL,
             timestamp = System.currentTimeMillis() - 1000 * 60 * 60 * 24,
             formattedTime = "Yesterday"
+        )
+    )
+
+    fun getInitialHelpTickets(): List<HelpTicket> = listOf(
+        HelpTicket(
+            ticketNumber = "TKT-8401",
+            parentName = "Snehal Meshram",
+            parentContact = "9765432109",
+            childId = "AW-042-02",
+            childName = "Ananya Rahul Meshram",
+            centerId = "AW-Center-042",
+            centerName = "AW-Center-042 (Shivaji Nagar)",
+            category = TicketCategory.WORKER_MISTAKE,
+            subject = "Sevika refused ration distribution & incorrect weight entry",
+            description = "The Anganwadi worker Rekha Tai refused to issue our Take-Home Ration packet claiming we came 10 minutes late. Also my daughter's weight was entered incorrectly in the register.",
+            status = TicketStatus.PENDING,
+            timestamp = System.currentTimeMillis() - 1000 * 60 * 60 * 18,
+            formattedDate = "Yesterday"
+        ),
+        HelpTicket(
+            ticketNumber = "TKT-8402",
+            parentName = "Sachin Gaikwad",
+            parentContact = "9890123456",
+            childId = "AW-042-01",
+            childName = "Aarav Sachin Gaikwad",
+            centerId = "AW-Center-042",
+            centerName = "AW-Center-042 (Shivaji Nagar)",
+            category = TicketCategory.RATION_ISSUE,
+            subject = "Query regarding protein powder and fortified oil distribution",
+            description = "Requesting Super Admin confirmation on whether protein powder packets are included in this month's THR distribution for toddlers.",
+            status = TicketStatus.RESOLVED,
+            timestamp = System.currentTimeMillis() - 1000 * 60 * 60 * 36,
+            formattedDate = "2 days ago",
+            superAdminResponse = "Complaint verified with District Inspector. Fortified oil and protein packets are fully stocked. Strict warning issued to Anganwadi Sevika to ensure zero delay in distribution on 24-Oct.",
+            responseTimestamp = System.currentTimeMillis() - 1000 * 60 * 60 * 12
+        )
+    )
+
+    fun getInitialHandovers(): List<com.example.data.model.RationHandover> = listOf(
+        com.example.data.model.RationHandover(
+            childId = "AW-042-01",
+            childName = "Aarav Sachin Gaikwad",
+            parentName = "Sachin Gaikwad",
+            parentContact = "9890123456",
+            regCode = "ACT-7842-AG",
+            cycleMonth = "October 2026",
+            itemsCollected = "2x THR Packets, 1L Fortified Oil, 1kg Chana Dal, 8 Fresh Eggs",
+            isHandedOver = false,
+            formattedHandoverTime = "Pending Collection"
+        ),
+        com.example.data.model.RationHandover(
+            childId = "AW-042-02",
+            childName = "Ananya Rahul Meshram",
+            parentName = "Snehal Meshram",
+            parentContact = "9765432109",
+            regCode = "ACT-9912-AM",
+            cycleMonth = "October 2026",
+            itemsCollected = "2x THR Packets, 1L Fortified Oil, 1kg Chana Dal, 8 Fresh Eggs",
+            isHandedOver = false,
+            formattedHandoverTime = "Pending Collection"
+        ),
+        com.example.data.model.RationHandover(
+            childId = "AW-042-03",
+            childName = "Vihaan Pramod Shinde",
+            parentName = "Pramod Shinde",
+            parentContact = "9422187654",
+            regCode = "ACT-3301-VS",
+            cycleMonth = "October 2026",
+            itemsCollected = "2x THR Packets, 1L Fortified Oil, 1kg Chana Dal",
+            isHandedOver = true,
+            handoverTimestamp = System.currentTimeMillis() - 1000 * 60 * 60 * 4,
+            formattedHandoverTime = "Today at 10:15 AM",
+            verifiedBySevika = "Rekha Tai Patil (Anganwadi Sevika)"
         )
     )
 }

@@ -4,6 +4,8 @@ import androidx.room.TypeConverter
 import com.example.data.model.NotificationPriority
 import com.example.data.model.NotificationType
 import com.example.data.model.NutritionStatus
+import com.example.data.model.TicketCategory
+import com.example.data.model.TicketStatus
 import com.example.data.model.VaccineStatus
 
 class Converters {
@@ -76,6 +78,42 @@ class Converters {
             }
         } else {
             NotificationPriority.NORMAL
+        }
+    }
+
+    @TypeConverter
+    fun fromTicketCategory(category: TicketCategory?): String {
+        return category?.name ?: TicketCategory.WORKER_MISTAKE.name
+    }
+
+    @TypeConverter
+    fun toTicketCategory(value: String?): TicketCategory {
+        return if (value != null) {
+            try {
+                TicketCategory.valueOf(value)
+            } catch (_: Exception) {
+                TicketCategory.WORKER_MISTAKE
+            }
+        } else {
+            TicketCategory.WORKER_MISTAKE
+        }
+    }
+
+    @TypeConverter
+    fun fromTicketStatus(status: TicketStatus?): String {
+        return status?.name ?: TicketStatus.PENDING.name
+    }
+
+    @TypeConverter
+    fun toTicketStatus(value: String?): TicketStatus {
+        return if (value != null) {
+            try {
+                TicketStatus.valueOf(value)
+            } catch (_: Exception) {
+                TicketStatus.PENDING
+            }
+        } else {
+            TicketStatus.PENDING
         }
     }
 }

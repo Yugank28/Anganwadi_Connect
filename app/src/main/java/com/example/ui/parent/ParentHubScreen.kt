@@ -2,6 +2,7 @@ package com.example.ui.parent
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -46,8 +47,18 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
+import androidx.compose.material.icons.filled.Gavel
+import androidx.compose.material.icons.filled.HelpOutline
+import androidx.compose.material.icons.filled.Send
+import androidx.compose.material.icons.filled.Shield
+import androidx.compose.material.icons.filled.SupportAgent
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
+import com.example.data.model.HelpTicket
+import com.example.data.model.TicketCategory
+import com.example.data.model.TicketStatus
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
@@ -113,6 +124,11 @@ fun ParentHubScreen(
     val aiAdviceState by viewModel.aiAdviceState.collectAsState()
     val notifications by viewModel.notifications.collectAsState()
     val unreadCount by viewModel.unreadNotificationCount.collectAsState()
+    val myTickets by viewModel.myHelpTickets.collectAsState()
+    val activeHandover by viewModel.activeChildRationHandover.collectAsState()
+    val helpCategory by viewModel.parentHelpCategory.collectAsState()
+    val helpSubject by viewModel.parentHelpSubject.collectAsState()
+    val helpDescription by viewModel.parentHelpDescription.collectAsState()
 
     var showNotificationDialog by remember { mutableStateOf(false) }
     var aiDisplayLang by remember { mutableStateOf(language) }
@@ -346,7 +362,15 @@ fun ParentHubScreen(
                     language = language
                 )
 
-                // 6. Upcoming Ration Distribution Schedule Card
+                // 6. Digital Ration Pickup Pass & Security Code Card (Parent Authentication)
+                DigitalRationPassCard(
+                    profile = profile,
+                    handover = activeHandover,
+                    schedule = rationSchedules.firstOrNull() ?: RationSchedule(),
+                    language = language
+                )
+
+                // 7. Upcoming Ration Distribution Schedule Card
                 RationScheduleCard(
                     schedule = rationSchedules.firstOrNull() ?: RationSchedule(),
                     language = language
@@ -371,6 +395,19 @@ fun ParentHubScreen(
                     displayLang = aiDisplayLang,
                     onToggleLang = { aiDisplayLang = it },
                     onRefresh = { viewModel.loadAiAdvice(profile.childId, forceRefresh = true) }
+                )
+
+                // 10. Help Center & Direct Complaint to Super Admin Card
+                ParentHelpCenterCard(
+                    myTickets = myTickets,
+                    category = helpCategory,
+                    subject = helpSubject,
+                    description = helpDescription,
+                    language = language,
+                    onCategoryChange = { viewModel.setParentHelpCategory(it) },
+                    onSubjectChange = { viewModel.setParentHelpSubject(it) },
+                    onDescriptionChange = { viewModel.setParentHelpDescription(it) },
+                    onSubmit = { viewModel.submitHelpTicket() }
                 )
             }
         }
@@ -978,6 +1015,546 @@ private fun AiGuidanceCard(
                         fontSize = 12.sp,
                         color = Slate600
                     )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun DigitalRationPassCard(
+    profile: ChildProfile,
+    handover: com.example.data.model.RationHandover?,
+    schedule: RationSchedule,
+    language: AppLanguage
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .border(1.dp, PrimaryIndigo.copy(alpha = 0.3f), RoundedCornerShape(16.dp))
+            .testTag("digital_ration_pass_card"),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.White),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            // Header
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(
+                        modifier = Modifier
+                            .size(36.dp)
+                            .clip(CircleShape)
+                            .background(PrimaryIndigoContainer),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Fastfood,
+                            contentDescription = "Ration Pass",
+                            tint = PrimaryIndigo,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Column {
+                        Text(
+                            text = if (language == AppLanguage.MARATHI) "पोषण आहार डिजिटल पास व सुरक्षा कोड"
+                            else if (language == AppLanguage.HINDI) "पोषण राशन डिजिटल पास एवं सुरक्षा कोड"
+                            else "Ration Digital Pass & Auth Code",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 15.sp,
+                            color = Slate900
+                        )
+                        Text(
+                            text = "Cycle: ${schedule.cycleMonth} • ${schedule.distributionDate}",
+                            fontSize = 11.sp,
+                            color = Slate600
+                        )
+                    }
+                }
+
+                val isCollected = handover?.isHandedOver == true
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(if (isCollected) Color(0xFFECFDF5) else Color(0xFFFEF3C7))
+                        .padding(horizontal = 8.dp, vertical = 4.dp)
+                ) {
+                    Text(
+                        text = if (isCollected)
+                            (if (language == AppLanguage.MARATHI) "✅ प्राप्त झाले" else "✅ Collected")
+                        else
+                            (if (language == AppLanguage.MARATHI) "⌛ मिळणे बाकी" else "⌛ Pass Active"),
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = if (isCollected) StatusNormal else Color(0xFFD97706)
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // Code Display Box
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(PrimaryIndigoContainer)
+                    .border(1.dp, PrimaryIndigo.copy(alpha = 0.3f), RoundedCornerShape(12.dp))
+                    .padding(14.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column {
+                        Text(
+                            text = if (language == AppLanguage.MARATHI) "अंगणवाडीत हा पडताळणी कोड दाखवा:" else "Show Code at Anganwadi for Pickup:",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = Slate700
+                        )
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text(
+                            text = profile.regCode.ifEmpty { "ACT-7842-AG" },
+                            fontSize = 20.sp,
+                            fontWeight = FontWeight.Black,
+                            color = PrimaryIndigo,
+                            letterSpacing = 1.sp
+                        )
+                        Text(
+                            text = "Guardian: ${profile.guardian} (${profile.parentContact})",
+                            fontSize = 11.sp,
+                            color = Slate600
+                        )
+                    }
+
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(Color.White)
+                            .padding(horizontal = 10.dp, vertical = 6.dp)
+                    ) {
+                        Text(
+                            text = "🔒 OTP / PIN",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = PrimaryIndigo
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // Handover Status Details
+            if (handover?.isHandedOver == true) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(Color(0xFFECFDF5))
+                        .border(1.dp, Color(0xFFA7F3D0), RoundedCornerShape(10.dp))
+                        .padding(10.dp)
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Default.CheckCircle, contentDescription = null, tint = StatusNormal, modifier = Modifier.size(18.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Column {
+                            Text(
+                                text = if (language == AppLanguage.MARATHI)
+                                    "पोषण आहार यशस्वीरित्या हस्तांतरित!"
+                                else
+                                    "Ration Packet Successfully Handed Over!",
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = StatusNormal
+                            )
+                            Text(
+                                text = "Verified on ${handover.formattedHandoverTime} by ${handover.verifiedBySevika}",
+                                fontSize = 11.sp,
+                                color = Slate900
+                            )
+                        }
+                    }
+                }
+            } else {
+                Text(
+                    text = if (language == AppLanguage.MARATHI)
+                        "अंगणवाडीत राशन पाकीट घेताना सेविकेला हा कोड अथवा मोबाईल नंबर सांगून पडताळणी पूर्ण करा."
+                    else
+                        "Present this authentication code to Sevika Rekha Tai Patil at Anganwadi to collect your monthly ration packets.",
+                    fontSize = 11.sp,
+                    color = Slate600
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun ParentHelpCenterCard(
+    myTickets: List<HelpTicket>,
+    category: TicketCategory,
+    subject: String,
+    description: String,
+    language: AppLanguage,
+    onCategoryChange: (TicketCategory) -> Unit,
+    onSubjectChange: (String) -> Unit,
+    onDescriptionChange: (String) -> Unit,
+    onSubmit: () -> Unit
+) {
+    var isExpanded by remember { mutableStateOf(false) }
+
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .border(1.dp, Slate200, RoundedCornerShape(16.dp))
+            .testTag("parent_help_center_card"),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.White),
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            // Header Row
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(
+                        modifier = Modifier
+                            .size(36.dp)
+                            .clip(CircleShape)
+                            .background(PrimaryIndigoContainer),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.SupportAgent,
+                            contentDescription = "Help Center",
+                            tint = PrimaryIndigo,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Column {
+                        Text(
+                            text = if (language == AppLanguage.MARATHI) "तक्रार आणि मदत केंद्र (Help Center)"
+                            else if (language == AppLanguage.HINDI) "शिकायत एवं सहायता केंद्र"
+                            else "Help Center & Complaints",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 15.sp,
+                            color = Slate900
+                        )
+                        Text(
+                            text = if (language == AppLanguage.MARATHI) " थेट जिल्हा सुपर ॲडमिन कडे (Super Admin)"
+                            else "Directly to Super Admin (District CDPO)",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = PrimaryIndigo
+                        )
+                    }
+                }
+
+                Button(
+                    onClick = { isExpanded = !isExpanded },
+                    shape = RoundedCornerShape(8.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = if (isExpanded) Slate100 else PrimaryIndigoContainer,
+                        contentColor = PrimaryIndigo
+                    )
+                ) {
+                    Text(
+                        text = if (isExpanded)
+                            (if (language == AppLanguage.MARATHI) "फॉर्म बंद करा" else "Close Form")
+                        else
+                            (if (language == AppLanguage.MARATHI) "तक्रार नोंदवा +" else "New Ticket +"),
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            // Reassurance Banner
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(Color(0xFFEFF6FF))
+                    .border(1.dp, Color(0xFFDBEAFE), RoundedCornerShape(8.dp))
+                    .padding(10.dp)
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = Icons.Default.Shield,
+                        contentDescription = "Secure",
+                        tint = PrimaryIndigo,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = if (language == AppLanguage.MARATHI)
+                            "🔒 तुमची तक्रार थेट जिल्हा सुपर ॲडमिनकडे जाते. अंगणवाडी सेविका/प्रशासक ही तक्रार बदलू किंवा लपवू शकत नाहीत."
+                        else if (language == AppLanguage.HINDI)
+                            "🔒 आपकी शिकायत सीधे जिला सुपर एडमिन तक जाती है। आंगनवाड़ी कार्यकर्ता इसे बदल या छुपा नहीं सकते।"
+                        else
+                            "🔒 Complaints go directly to District Super Admin. Anganwadi Workers/Admins cannot modify or hide your tickets.",
+                        fontSize = 11.sp,
+                        color = Slate900,
+                        fontWeight = FontWeight.Medium
+                    )
+                }
+            }
+
+            // New Complaint Submission Form
+            if (isExpanded) {
+                Spacer(modifier = Modifier.height(14.dp))
+
+                Text(
+                    text = if (language == AppLanguage.MARATHI) "समस्येचा प्रकार निवडा (Category):" else "Select Issue Category:",
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Slate900
+                )
+
+                Spacer(modifier = Modifier.height(6.dp))
+
+                // Category Chips Row (Horizontal Scroll)
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    TicketCategory.entries.forEach { cat ->
+                        FilterChip(
+                            selected = category == cat,
+                            onClick = { onCategoryChange(cat) },
+                            label = {
+                                val catName = when (language) {
+                                    AppLanguage.MARATHI -> cat.displayNameMr
+                                    AppLanguage.HINDI -> cat.displayNameHi
+                                    AppLanguage.ENGLISH -> cat.displayNameEn
+                                }
+                                Text(catName, fontSize = 11.sp)
+                            },
+                            colors = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = PrimaryIndigoContainer,
+                                selectedLabelColor = PrimaryIndigo
+                            )
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(10.dp))
+
+                OutlinedTextField(
+                    value = subject,
+                    onValueChange = onSubjectChange,
+                    label = {
+                        Text(
+                            if (language == AppLanguage.MARATHI) "तक्रारीचा विषय (Subject)"
+                            else if (language == AppLanguage.HINDI) "शिकायत का विषय"
+                            else "Subject / Brief Title"
+                        )
+                    },
+                    placeholder = { Text("e.g. Sevika refused THR packet distribution") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(10.dp),
+                    colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = PrimaryIndigo)
+                )
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                OutlinedTextField(
+                    value = description,
+                    onValueChange = onDescriptionChange,
+                    label = {
+                        Text(
+                            if (language == AppLanguage.MARATHI) "तक्रारीचा सविस्तर तपशील (Details)"
+                            else if (language == AppLanguage.HINDI) "शिकायत का पूर्ण विवरण"
+                            else "Detailed Complaint Description"
+                        )
+                    },
+                    placeholder = { Text("Provide complete details of what happened at Anganwadi center...") },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(100.dp),
+                    shape = RoundedCornerShape(10.dp),
+                    colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = PrimaryIndigo)
+                )
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                Button(
+                    onClick = {
+                        onSubmit()
+                        isExpanded = false
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(46.dp),
+                    shape = RoundedCornerShape(10.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = PrimaryIndigo)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Send,
+                        contentDescription = "Send",
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = if (language == AppLanguage.MARATHI) "सुपर ॲडमिन कडे तक्रार पाठवा"
+                        else if (language == AppLanguage.HINDI) "सुपर एडमिन को शिकायत भेजें"
+                        else "Submit Complaint to Super Admin",
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(14.dp))
+
+            HorizontalDivider(color = Slate100)
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            // My Submitted Help Tickets & Resolution Section
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = if (language == AppLanguage.MARATHI) "माझ्या तक्रारी आणि उत्तर स्थिति (${myTickets.size})"
+                    else "My Complaints & Status (${myTickets.size})",
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Slate900
+                )
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            if (myTickets.isEmpty()) {
+                Text(
+                    text = if (language == AppLanguage.MARATHI) "तुमची कोणतीही प्रलंबित तक्रार नाही." else "No complaint submitted yet.",
+                    fontSize = 12.sp,
+                    color = Slate600
+                )
+            } else {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    myTickets.forEach { ticket ->
+                        val statusBg = when (ticket.status) {
+                            TicketStatus.PENDING -> Color(0xFFFEF2F2)
+                            TicketStatus.IN_PROGRESS -> Color(0xFFEFF6FF)
+                            TicketStatus.RESOLVED -> Color(0xFFECFDF5)
+                            TicketStatus.REJECTED -> Color(0xFFF3F4F6)
+                        }
+
+                        val statusColor = when (ticket.status) {
+                            TicketStatus.PENDING -> StatusSAM
+                            TicketStatus.IN_PROGRESS -> PrimaryIndigo
+                            TicketStatus.RESOLVED -> StatusNormal
+                            TicketStatus.REJECTED -> Slate600
+                        }
+
+                        val statusText = when (language) {
+                            AppLanguage.MARATHI -> ticket.status.labelMr
+                            AppLanguage.HINDI -> ticket.status.labelHi
+                            AppLanguage.ENGLISH -> ticket.status.labelEn
+                        }
+
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(Slate50)
+                                .border(1.dp, Slate200, RoundedCornerShape(12.dp))
+                                .padding(12.dp)
+                        ) {
+                            Column {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = ticket.ticketNumber,
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = PrimaryIndigo
+                                    )
+
+                                    Box(
+                                        modifier = Modifier
+                                            .clip(RoundedCornerShape(6.dp))
+                                            .background(statusBg)
+                                            .padding(horizontal = 8.dp, vertical = 2.dp)
+                                    ) {
+                                        Text(
+                                            text = statusText,
+                                            fontSize = 10.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = statusColor
+                                        )
+                                    }
+                                }
+
+                                Spacer(modifier = Modifier.height(4.dp))
+
+                                Text(
+                                    text = ticket.subject,
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Slate900
+                                )
+
+                                Text(
+                                    text = ticket.description,
+                                    fontSize = 11.sp,
+                                    color = Slate700,
+                                    modifier = Modifier.padding(vertical = 2.dp)
+                                )
+
+                                // Official Super Admin Resolution Note
+                                ticket.superAdminResponse?.let { resp ->
+                                    Spacer(modifier = Modifier.height(6.dp))
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clip(RoundedCornerShape(8.dp))
+                                            .background(Color(0xFFECFDF5))
+                                            .border(1.dp, Color(0xFFA7F3D0), RoundedCornerShape(8.dp))
+                                            .padding(8.dp)
+                                    ) {
+                                        Column {
+                                            Text(
+                                                text = "🏛️ Super Admin (District Officer) Response:",
+                                                fontSize = 10.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = StatusNormal
+                                            )
+                                            Text(
+                                                text = resp,
+                                                fontSize = 11.sp,
+                                                color = Slate900
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }

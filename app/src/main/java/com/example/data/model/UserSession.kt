@@ -3,7 +3,8 @@ package com.example.data.model
 enum class SessionRole {
     GUEST,
     ADMIN,
-    PARENT
+    PARENT,
+    SUPER_ADMIN
 }
 
 data class UserSession(
@@ -22,4 +23,7 @@ data class UserSession(
 
     val isParent: Boolean
         get() = role == SessionRole.PARENT
+
+    val isSuperAdmin: Boolean
+        get() = role == SessionRole.SUPER_ADMIN
 }
